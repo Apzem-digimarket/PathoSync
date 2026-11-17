@@ -33,6 +33,8 @@ pub struct DeviceInfo {
     pub channels: u16,
     pub sample_rate: u32,
     pub is_default: bool,
+    /// Set when Windows lists the microphone but won't say how to record from it.
+    pub problem: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -65,6 +67,9 @@ pub struct MicStatus {
     pub ch: ChannelStatus,
     pub device: String,
     pub error: Option<String>,
+    /// "ok", "starting", "no_stream" (Windows sends nothing) or "silent" (Windows sends only
+    /// digital silence: muted, volume 0, or microphone access blocked).
+    pub signal: &'static str,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -95,19 +100,45 @@ pub struct RecordingResult {
     pub warnings: Vec<String>,
 }
 
-/// All microphones Windows (or macOS) offers for recording.
+/// All microphones Windows (or macOS) offers for recording. Microphones that can't be used are
+/// still listed, with the reason in `problem`, so they never just vanish from the list.
 pub fn list_input_devices() -> Result<Vec<DeviceInfo>, String> {
     let host = cpal::default_host();
     let default_id = host.default_input_device().and_then(|d| d.id().ok()).map(|i| i.to_string());
     let devices = host.input_devices().map_err(|e| format!("Could not list microphones: {e}"))?;
     let mut out = Vec::new();
-    for d in devices {
-        let Ok(id) = d.id().map(|i| i.to_string()) else { continue };
-        let Ok(cfg) = d.default_input_config() else { continue };
+    for (n, d) in devices.enumerate() {
         let name = d.description().map(|x| x.name().to_string()).unwrap_or_else(|_| d.to_string());
-        out.push(DeviceInfo { is_default: Some(&id) == default_id.as_ref(), id, name, channels: cfg.channels(), sample_rate: cfg.sample_rate() });
+        let id = match d.id() {
+            Ok(i) => i.to_string(),
+            Err(e) => {
+                out.push(DeviceInfo { id: format!("unusable:{n}"), name, channels: 1, sample_rate: SAMPLE_RATE, is_default: false, problem: Some(format!("Windows gives no ID for it ({e})")) });
+                continue;
+            }
+        };
+        let is_default = Some(&id) == default_id.as_ref();
+        match input_config(&d) {
+            Ok(cfg) => out.push(DeviceInfo { is_default, id, name, channels: cfg.channels(), sample_rate: cfg.sample_rate(), problem: None }),
+            Err(e) => out.push(DeviceInfo { is_default, id, name, channels: 1, sample_rate: SAMPLE_RATE, problem: Some(e) }),
+        }
     }
     Ok(out)
+}
+
+/// The format to record a device in: its default format, or else the best format it says it
+/// supports (some Bluetooth and jack-detected mics fail the default query).
+fn input_config(device: &cpal::Device) -> Result<cpal::SupportedStreamConfig, String> {
+    let default_err = match device.default_input_config() {
+        Ok(c) => return Ok(c),
+        Err(e) => e.to_string(),
+    };
+    let ranges: Vec<_> = device.supported_input_configs().map(|r| r.collect()).unwrap_or_default();
+    let pick = |r: &cpal::SupportedStreamConfigRange| {
+        let rate = SAMPLE_RATE.clamp(r.min_sample_rate(), r.max_sample_rate());
+        (*r).with_sample_rate(rate)
+    };
+    let score = |c: &cpal::SupportedStreamConfig| (c.sample_rate() == SAMPLE_RATE, c.sample_format() == cpal::SampleFormat::F32, c.sample_rate());
+    ranges.iter().map(pick).max_by_key(score).ok_or(default_err)
 }
 
 fn find_device(host: &cpal::Host, id: &str, name: &str) -> Option<cpal::Device> {
@@ -149,6 +180,8 @@ struct Route {
     channel: usize,
     queue: rtrb::Producer<f32>,
     overflow: Arc<AtomicU64>,
+    /// Nanoseconds after engine start of the last non-zero sample (0 = none yet).
+    sound_ns: Arc<AtomicU64>,
 }
 
 fn build_stream<T>(device: &cpal::Device, config: cpal::StreamConfig, mut routes: Vec<Route>, last_ns: Arc<AtomicU64>, start: Instant, errors: Arc<Mutex<Option<String>>>) -> Result<cpal::Stream, String>
@@ -162,7 +195,11 @@ where
             config,
             move |data: &[T], _| {
                 let frames = data.len() / channels;
+                let now_ns = start.elapsed().as_nanos().max(1) as u64;
                 for r in routes.iter_mut() {
+                    if data.iter().skip(r.channel).step_by(channels).any(|s| cpal::Sample::to_sample::<f32>(*s) != 0.0) {
+                        r.sound_ns.store(now_ns, Ordering::Relaxed);
+                    }
                     match r.queue.write_chunk_uninit(frames) {
                         Ok(chunk) => {
                             chunk.fill_from_iter(data.iter().skip(r.channel).step_by(channels).map(|s| cpal::Sample::to_sample::<f32>(*s)));
@@ -172,7 +209,7 @@ where
                         }
                     }
                 }
-                last_ns.store(start.elapsed().as_nanos().max(1) as u64, Ordering::Release);
+                last_ns.store(now_ns, Ordering::Release);
             },
             move |err: cpal::Error| {
                 let msg = match err.kind() {
@@ -192,6 +229,31 @@ struct Opened {
     source: DeviceSource,
     rate: u32,
     device: String,
+    probe: Probe,
+}
+
+/// Lets the master thread tell "no audio arriving" apart from "audio arriving, all zeros".
+#[derive(Clone)]
+struct Probe {
+    last_ns: Arc<AtomicU64>,
+    sound_ns: Arc<AtomicU64>,
+}
+
+impl Probe {
+    fn signal(&self, now_ns: u64) -> &'static str {
+        const GRACE: u64 = 2_500_000_000;
+        let last = self.last_ns.load(Ordering::Relaxed);
+        let sound = self.sound_ns.load(Ordering::Relaxed);
+        if now_ns < GRACE {
+            "starting"
+        } else if last == 0 || now_ns.saturating_sub(last) > GRACE {
+            "no_stream"
+        } else if sound == 0 || now_ns.saturating_sub(sound) > GRACE {
+            "silent"
+        } else {
+            "ok"
+        }
+    }
 }
 
 /// Opens every device needed by `mics` on the calling thread. Returns the queues per mic and the
@@ -213,7 +275,7 @@ fn open_devices(mics: &[MicConfig], start: Instant, errors: &[Arc<Mutex<Option<S
         let device = find_device(&host, &dev_id, &first.device_name)
             .ok_or_else(|| format!("{}: the microphone \"{}\" is not connected.", label(first), if first.device_name.is_empty() { &dev_id } else { &first.device_name }))?;
         let dev_name = device.description().map(|x| x.name().to_string()).unwrap_or_else(|_| device.to_string());
-        let sup = device.default_input_config().map_err(|e| format!("{}: {dev_name} can't record ({e}).", label(first)))?;
+        let sup = input_config(&device).map_err(|e| format!("{}: Windows won't let PathoSync record from {dev_name} ({e}).", label(first)))?;
         let mut config = sup.config();
         config.buffer_size = cpal::BufferSize::Default;
         let last_ns = Arc::new(AtomicU64::new(0));
@@ -225,8 +287,10 @@ fn open_devices(mics: &[MicConfig], start: Instant, errors: &[Arc<Mutex<Option<S
             }
             let (prod, cons) = rtrb::RingBuffer::new(config.sample_rate as usize * 2);
             let overflow = Arc::new(AtomicU64::new(0));
-            routes.push(Route { channel: m.input_channel as usize, queue: prod, overflow: overflow.clone() });
-            opened.push(Opened { mic: i, source: DeviceSource { queue: cons, overflow, last_ns: last_ns.clone() }, rate: config.sample_rate, device: dev_name.clone() });
+            let sound_ns = Arc::new(AtomicU64::new(0));
+            routes.push(Route { channel: m.input_channel as usize, queue: prod, overflow: overflow.clone(), sound_ns: sound_ns.clone() });
+            let probe = Probe { last_ns: last_ns.clone(), sound_ns };
+            opened.push(Opened { mic: i, source: DeviceSource { queue: cons, overflow, last_ns: last_ns.clone() }, rate: config.sample_rate, device: dev_name.clone(), probe });
         }
         let errs = errors[idxs[0]].clone();
         use cpal::SampleFormat as F;
@@ -320,6 +384,7 @@ impl Engine {
         };
 
         let devices: Vec<String> = opened.iter().map(|o| o.device.clone()).collect();
+        let probes: Vec<Probe> = opened.iter().map(|o| o.probe.clone()).collect();
         let chans: Vec<(ChannelSetup, Box<dyn Source>)> = opened
             .into_iter()
             .map(|o| {
@@ -346,7 +411,7 @@ impl Engine {
         let devs = devices.clone();
         let master = std::thread::Builder::new()
             .name("pathosync-master".into())
-            .spawn(move || master_loop(pipeline, cmd_rx, sh, devs, start))
+            .spawn(move || master_loop(pipeline, cmd_rx, sh, devs, probes, start))
             .map_err(|e| e.to_string())?;
 
         Ok(Engine { cfg, devices, cmd: cmd_tx, shared, master: Some(master), device_thread: Some(device_thread), stop_devices: Some(stop_tx), rec: Mutex::new(None) })
@@ -517,7 +582,7 @@ impl Drop for Engine {
     }
 }
 
-fn master_loop(mut p: Pipeline, cmds: Receiver<Cmd>, shared: Arc<Shared>, devices: Vec<String>, start: Instant) {
+fn master_loop(mut p: Pipeline, cmds: Receiver<Cmd>, shared: Arc<Shared>, devices: Vec<String>, probes: Vec<Probe>, start: Instant) {
     let rate = SAMPLE_RATE as f64;
     loop {
         for cmd in cmds.try_iter() {
@@ -542,12 +607,13 @@ fn master_loop(mut p: Pipeline, cmds: Receiver<Cmd>, shared: Arc<Shared>, device
         if let Some(r) = p.take_sync_result() {
             *shared.clap_result.lock() = Some(r);
         }
+        let now_ns = start.elapsed().as_nanos() as u64;
         let st = EngineStatus {
             mics: p
                 .status()
                 .into_iter()
                 .enumerate()
-                .map(|(i, ch)| MicStatus { ch, device: devices.get(i).cloned().unwrap_or_default(), error: shared.mic_errors[i].lock().clone() })
+                .map(|(i, ch)| MicStatus { ch, device: devices.get(i).cloned().unwrap_or_default(), error: shared.mic_errors[i].lock().clone(), signal: probes.get(i).map_or("ok", |pr| pr.signal(now_ns)) })
                 .collect(),
             recording: p.is_recording(),
             recorded_secs: p.recorded_frames() as f64 / rate,

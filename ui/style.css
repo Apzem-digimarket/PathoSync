@@ -104,6 +104,7 @@ main { max-width: 1240px; margin: 0 auto; padding: 22px 28px 40px; }
 .tile-foot { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
 .tile.err .pad { opacity: .45; pointer-events: none; }
 .tile-err { color: var(--rec); font-size: 13px; font-weight: 600; }
+.tile-help { display: block; margin-top: 4px; color: var(--muted); font-weight: 400; font-size: 12px; line-height: 1.4; }
 .empty { padding: 34px; text-align: center; color: var(--muted); }
 .empty b { display: block; color: var(--ink); font-size: 17px; margin-bottom: 6px; }
 

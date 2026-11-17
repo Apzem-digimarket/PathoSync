@@ -37,5 +37,24 @@ GOOD TO KNOW
   - The settings are kept in "PathoSync.settings.json" next to the program.
     Copy both files to another computer to reuse the same setup.
 
+A MICROPHONE'S LEVEL BAR DOES NOT MOVE
+  The tile says why:
+  "Windows is not sending any sound from this mic"
+    - Bluetooth headset: it must be connected for calls. In Windows
+      Settings > System > Sound > Input it appears as
+      "Headset (... Hands-Free)". Choose that one in PathoSync.
+    - Unplug and reconnect, then Setup > "Save & apply".
+  "Windows is sending only silence from this mic (muted?)"
+    - Windows Settings > System > Sound > Input > the microphone:
+      not muted, volume above 0.
+    - Settings > Privacy & security > Microphone: "Let desktop apps access
+      your microphone" must be On.
+    - Wired 3.5 mm mic: a 4-ring plug (headset) needs the combined headset
+      socket; a 3-ring plug needs the pink microphone socket. Many laptops
+      have only one socket, so only one wired mic can be used there - use a
+      USB mic or USB sound adapter for the others.
+  A microphone missing from the list: Setup > "refresh the list". A mic that
+  Windows shows but cannot be used is listed with the reason.
+
 OPENING FROM OTHER SOFTWARE
   PathoSync.exe --case S26-1234 --folder "D:\Recordings" --exit-after-save

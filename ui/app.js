@@ -145,6 +145,15 @@
   }
   window.addEventListener('blur', () => releasers.forEach((r) => r()));
 
+  const SIGNAL_MSG = {
+    no_stream: 'Windows is not sending any sound from this mic.',
+    silent: 'Windows is sending only silence from this mic (muted?).',
+  };
+  const SIGNAL_HELP = {
+    no_stream: 'Bluetooth headset: connect it for calls (the "Headset … Hands-Free" microphone), not only for music. Then check Windows Settings → System → Sound → Input, and press Setup → Save & apply.',
+    silent: 'Check Windows Settings → System → Sound → Input → this microphone: not muted, volume above 0. Check Settings → Privacy & security → Microphone → "Let desktop apps access your microphone" is On. Wired 3.5 mm mic: the plug must suit the socket (headset socket for 4-ring plugs, pink mic socket for 3-ring plugs).',
+  };
+
   function updateTiles() {
     if (!status) return;
     status.mics.forEach((m, k) => {
@@ -157,10 +166,14 @@
       t.fill.style.width = level + '%';
       t.fill.style.setProperty('--full', level > 0.5 ? `${(100 / level) * 100}%` : '100%');
       t.peak.style.left = `calc(${p}% - 1px)`;
-      const problem = m.error || (!m.locked ? 'Waiting for sound from this microphone…' : '');
+      const problem = m.error || SIGNAL_MSG[m.signal] || (!m.locked ? 'Waiting for sound from this microphone…' : '');
       t.root.classList.toggle('err', !!m.error);
       t.err.hidden = !problem;
-      t.err.textContent = problem;
+      const help = !m.error && SIGNAL_HELP[m.signal];
+      if (t.err.dataset.msg !== problem + (help || '')) {
+        t.err.dataset.msg = problem + (help || '');
+        t.err.replaceChildren(problem, help ? h('span', { class: 'tile-help' }, help) : '');
+      }
       t.root.classList.toggle('onair', m.on_air);
       t.root.classList.toggle('held', m.held && !m.on_air);
       if (m.on_air) {
@@ -278,7 +291,17 @@
     if (name === 'check') renderCheck();
   }
 
+  async function refreshDevices() {
+    try {
+      const fresh = await invoke('get_state');
+      state.devices = fresh.devices;
+      state.device_error = fresh.device_error;
+    } catch (e) { /* keep the old list */ }
+    if (draft) renderMicRows();
+  }
+
   function openSetup() {
+    refreshDevices();
     draft = JSON.parse(JSON.stringify(state.settings));
     $('setupErr').textContent = '';
     $('clapMsg').textContent = '';
@@ -309,7 +332,7 @@
       },
     },
       h('option', { value: '' }, '— Choose a microphone —'),
-      state.devices.map((d) => h('option', { value: d.id, selected: d.id === m.device_id }, d.name + (d.channels > 1 ? ` (${d.channels} inputs)` : '') + (d.is_default ? ' · default' : ''))),
+      state.devices.map((d) => h('option', { value: d.id, selected: d.id === m.device_id, disabled: !!d.problem && d.id !== m.device_id }, d.name + (d.channels > 1 ? ` (${d.channels} inputs)` : '') + (d.is_default ? ' · default' : '') + (d.problem ? ` — can't be used: ${d.problem}` : ''))),
       m.device_id && !dev ? h('option', { value: m.device_id, selected: true }, `${m.device_name || 'Unknown microphone'} (not connected)`) : null
     );
     const inputSelect = dev && dev.channels > 1
@@ -442,7 +465,7 @@
         fill.style.setProperty('--full', pct(m.rms_db) > 0.5 ? `${(100 / pct(m.rms_db)) * 100}%` : '100%');
         rows.push(h('tr', {},
           h('td', {}, h('b', {}, micName(slot)), h('div', { class: 'small' }, m.device)),
-          h('td', {}, h('div', { class: 'meter' }, fill)),
+          h('td', {}, h('div', { class: 'meter' }, fill), SIGNAL_MSG[m.signal] ? h('div', { class: 'small tile-err', title: SIGNAL_HELP[m.signal] }, SIGNAL_MSG[m.signal]) : null),
           h('td', {}, m.locked ? `${noise.toFixed(0)} dB` : '—', m.locked ? h('span', { class: 'tag ' + noiseTag[0] }, noiseTag[1]) : null),
           h('td', {}, m.locked ? `${m.drift_ppm >= 0 ? '+' : ''}${m.drift_ppm.toFixed(0)} ppm` : '—', m.locked ? h('span', { class: 'tag ' + (drift < 400 ? 'good' : 'bad') }, drift < 400 ? 'Corrected' : 'Unusually large') : null),
           h('td', {}, String(m.dropouts), m.dropouts ? h('span', { class: 'tag bad' }, 'Check cable / signal') : null),
@@ -510,12 +533,7 @@
       renderOptions();
     }
   });
-  $('refreshDevices').addEventListener('click', async () => {
-    const fresh = await invoke('get_state');
-    state.devices = fresh.devices;
-    state.device_error = fresh.device_error;
-    renderMicRows();
-  });
+  $('refreshDevices').addEventListener('click', refreshDevices);
   $('caseInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') toggleRecording(); });
 
   async function init() {

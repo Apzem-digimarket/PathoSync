@@ -1,6 +1,6 @@
 [package]
 name = "pathosync"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "PathoSync – multi-microphone push-to-talk recorder"
 

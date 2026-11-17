@@ -568,6 +568,26 @@ mod tests {
     }
 
     #[test]
+    fn bluetooth_rate_mics_are_heard_and_in_sync() {
+        // Bluetooth headset mics run at 16 kHz or 8 kHz and deliver bursty chunks; check they
+        // are recorded (not silent) and line up with a 48 kHz wired mic.
+        let clicks: Vec<f64> = (1..12).map(|i| i as f64 * 5.0).collect();
+        let (m1, s1) = SimMic::new(48_000.0, 0.0, 480, clicks.clone());
+        let (m2, s2) = SimMic::new(16_000.0, 300.0, 480, clicks.clone());
+        let (m3, s3) = SimMic::new(8_000.0, -300.0, 60, clicks.clone());
+        let found = run(vec![m1, m2, m3], vec![s1, s2, s3], 62.0, &[48_000, 16_000, 8_000]);
+        for (c, f) in found.iter().enumerate() {
+            assert!(f.len() >= 10, "mic {c}: clicks found {}", f.len());
+        }
+        for (k, &t0) in found[0].iter().enumerate().skip(2) {
+            for f in &found[1..] {
+                let t = f.iter().find(|&&t| (t - t0).abs() < 0.5).expect("click missing");
+                assert!((t - t0).abs() < 0.003, "click {k}: {:.1} ms apart", (t - t0) * 1000.0);
+            }
+        }
+    }
+
+    #[test]
     fn push_to_talk_keeps_the_preroll_and_mutes_the_rest() {
         let q = Arc::new(Mutex::new(Vec::new()));
         let chans: Vec<(ChannelSetup, Box<dyn Source>)> = vec![(setup("A", 48_000), Box::new(SimSource(q.clone(), Arc::new(Mutex::new(None)))))];
