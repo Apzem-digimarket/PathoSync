@@ -25,9 +25,14 @@ EVERY RECORDING
   4. Click "Stop & save". Click "Open folder" to see the files.
 
 WHAT IS SAVED (one folder per recording)
-  <case>_<date>_<time>_mix.wav         all microphones mixed together
-  <case>_<date>_<time>_multitrack.wav  one channel per microphone
+  <case>_<date>_<time>_mix.mp3         all microphones mixed together
+  <case>_<date>_<time>_1-<name>.mp3    microphone 1 only (one file per mic)
   <case>_<date>_<time>_info.json       who spoke when, mic names, times
+  The MP3 files play on any computer or phone. Sound is saved only while
+  a mic is held (ON AIR); the rest of the file is silent on purpose.
+  After saving, PathoSync shows how loud each mic was - "SILENT" means that
+  mic picked up nothing (see the next section).
+  Lossless WAV copies: Setup > Saving & options > "Keep WAV".
 
 GOOD TO KNOW
   - The keys work even when PathoSync is behind other windows.

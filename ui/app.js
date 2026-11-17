@@ -261,9 +261,12 @@
     $('saved').classList.toggle('is-silent', silent);
     const speakers = new Set(r.segments.map((s) => s.mic));
     $('savedMeta').textContent = `${fmtDuration(r.duration_s)} · ${r.segments.length} talk segment${r.segments.length === 1 ? '' : 's'}` + (speakers.size ? ` · ${[...speakers].join(', ')}` : ' · nobody pressed talk');
+    const level = (l) => l.on_air_s <= 0 ? 'not used' : l.peak_db === null ? 'SILENT - no sound picked up' : `loudest ${l.peak_db.toFixed(0)} dB` + (l.peak_db < -45 ? ' (very quiet)' : '');
     $('savedFiles').replaceChildren(
-      ...r.mix.map((f) => h('li', {}, 'All mics mixed: ', h('code', {}, baseName(f)))),
-      ...r.multitrack.map((f) => h('li', {}, 'One channel per mic: ', h('code', {}, baseName(f)))),
+      ...r.mp3.map((f, k) => h('li', {}, k === 0 ? 'All mics mixed: ' : `${r.levels[k - 1] ? r.levels[k - 1].mic : 'Mic'} only: `, h('code', {}, baseName(f)),
+        k > 0 && r.levels[k - 1] ? h('span', { class: 'small' }, ` · ${fmtDuration(r.levels[k - 1].on_air_s)} on air, ${level(r.levels[k - 1])}`) : null)),
+      ...r.mix.map((f) => h('li', {}, 'WAV, all mics mixed: ', h('code', {}, baseName(f)))),
+      ...r.multitrack.map((f) => h('li', {}, 'WAV, one channel per mic: ', h('code', {}, baseName(f)))),
       h('li', {}, 'Who spoke when: ', h('code', {}, baseName(r.info)))
     );
     $('savedWarn').replaceChildren(...r.warnings.map((w) => h('li', {}, w)));
@@ -368,6 +371,7 @@
     $('folderPath').textContent = draft.save_folder || 'No folder chosen';
     $('prerollInput').value = draft.preroll_ms;
     $('tailInput').value = draft.tail_ms;
+    $('keepWavInput').checked = !!draft.keep_wav;
     $('settingsPath').textContent = state.settings_path;
     $('version').textContent = state.version;
   }
@@ -433,6 +437,7 @@
   async function saveSetup() {
     draft.preroll_ms = Math.max(0, Math.min(2000, Number($('prerollInput').value) || 0));
     draft.tail_ms = Math.max(0, Math.min(2000, Number($('tailInput').value) || 0));
+    draft.keep_wav = $('keepWavInput').checked;
     const problem = validateDraft();
     if (problem) {
       $('setupErr').textContent = problem;

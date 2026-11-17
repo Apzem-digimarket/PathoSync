@@ -5,6 +5,7 @@ pub mod align;
 pub mod dsp;
 pub mod engine;
 pub mod gate;
+pub mod mp3;
 pub mod pipeline;
 pub mod writer;
 

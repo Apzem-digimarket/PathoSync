@@ -1,6 +1,6 @@
 [package]
 name = "pathosync-core"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 description = "Audio engine for PathoSync: multi-mic capture, clock-drift correction, push-to-talk gating and WAV writing"
 
@@ -13,3 +13,4 @@ serde_json = "1"
 parking_lot = "0.13"
 crossbeam-channel = "0.5"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+mp3lame-encoder = "0.3.0"

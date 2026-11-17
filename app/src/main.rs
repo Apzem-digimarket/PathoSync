@@ -46,6 +46,9 @@ struct Settings {
     preroll_ms: u32,
     tail_ms: u32,
     mics: Vec<MicSlot>,
+    /// Also keep the lossless WAV files next to the MP3s.
+    #[serde(default)]
+    keep_wav: bool,
 }
 
 impl Default for Settings {
@@ -55,6 +58,7 @@ impl Default for Settings {
             save_folder: docs.to_string_lossy().into_owned(),
             preroll_ms: 500,
             tail_ms: 300,
+            keep_wav: false,
             mics: (0..MAX_MICS).map(|i| MicSlot { name: format!("Mic {}", i + 1), key: format!("F{}", i + 1), ..Default::default() }).collect(),
         }
     }
@@ -194,6 +198,7 @@ impl App {
                 .collect(),
             preroll_ms: s.preroll_ms,
             tail_ms: s.tail_ms,
+            keep_wav: s.keep_wav,
         };
         match Engine::start(cfg) {
             Ok(e) => {

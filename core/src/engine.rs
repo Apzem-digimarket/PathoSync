@@ -59,6 +59,9 @@ pub struct EngineConfig {
     pub mics: Vec<MicConfig>,
     pub preroll_ms: u32,
     pub tail_ms: u32,
+    /// Keep the lossless WAV files after the MP3s are made.
+    #[serde(default)]
+    pub keep_wav: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -90,10 +93,23 @@ pub struct TalkSegment {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct MicLevel {
+    pub mic: String,
+    pub on_air_s: f64,
+    /// Loudest sound in dB below full scale; None = complete silence.
+    pub peak_db: Option<f32>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct RecordingResult {
     pub folder: PathBuf,
+    /// `_mix.mp3` first, then one MP3 per microphone.
+    pub mp3: Vec<PathBuf>,
+    /// WAV files (empty unless kept, or if making the MP3s failed).
     pub mix: Vec<PathBuf>,
     pub multitrack: Vec<PathBuf>,
+    /// Per mic: how long it was on air and the loudest sound it recorded.
+    pub levels: Vec<MicLevel>,
     pub info: PathBuf,
     pub duration_s: f64,
     pub segments: Vec<TalkSegment>,
@@ -457,7 +473,7 @@ impl Engine {
         let (tx, handle) = writer::spawn(plan, self.shared.writer_error.clone())?;
         let active = ActiveRecording { folder: dir.clone(), base, case: case.trim().to_string(), started, writer: handle };
         // Written now so an interrupted recording can still be identified; replaced when it ends.
-        let _ = std::fs::write(active.folder.join(format!("{}_info.json", active.base)), self.info_json(&active, None, None));
+        let _ = std::fs::write(active.folder.join(format!("{}_info.json", active.base)), self.info_json(&active, None, None, &[]));
         self.cmd.send(Cmd::StartRec(tx)).map_err(|_| "The recorder has stopped. Restart PathoSync.".to_string())?;
         *rec = Some(active);
         Ok(dir)
@@ -489,11 +505,40 @@ impl Engine {
         }
         let segments: Vec<TalkSegment> =
             timeline.segments.iter().map(|s| TalkSegment { mic: self.mic_label(s.channel), channel: s.channel + 1, start_s: s.start_s, end_s: s.end_s }).collect();
+        let levels: Vec<MicLevel> = (0..self.cfg.mics.len())
+            .map(|i| MicLevel {
+                mic: self.mic_label(i),
+                on_air_s: timeline.segments.iter().filter(|s| s.channel == i).map(|s| s.end_s - s.start_s).sum::<f64>().abs(),
+                peak_db: timeline.peaks.get(i).filter(|&&p| p >= 1e-5).map(|&p| 20.0 * p.log10()),
+            })
+            .collect();
+
+        // MP3s for everyday listening; the WAVs are removed unless they should be kept.
+        let labels: Vec<String> = (0..self.cfg.mics.len()).map(|i| self.mic_label(i)).collect();
+        let mut files = files;
+        let mp3 = match crate::mp3::convert(&active.folder, &active.base, &files.mix, &files.multitrack, &labels, SAMPLE_RATE) {
+            Ok(m) => {
+                if !self.cfg.keep_wav {
+                    for f in files.mix.iter().chain(files.multitrack.iter()) {
+                        let _ = std::fs::remove_file(f);
+                    }
+                    files.mix.clear();
+                    files.multitrack.clear();
+                }
+                m
+            }
+            Err(e) => {
+                warnings.push(format!("Could not make the MP3 files ({e}). The recording is kept as WAV files."));
+                Vec::new()
+            }
+        };
         let info = active.folder.join(format!("{}_info.json", active.base));
-        std::fs::write(&info, self.info_json(&active, Some((&files, &timeline)), Some(&segments))).map_err(|e| format!("Could not save the info file: {e}"))?;
+        std::fs::write(&info, self.info_json(&active, Some((&files, &timeline)), Some(&segments), &mp3)).map_err(|e| format!("Could not save the info file: {e}"))?;
         let _ = active.writer.join(); // already finished: it replied above
         Ok(RecordingResult {
             folder: active.folder,
+            mp3,
+            levels,
             mix: files.mix,
             multitrack: files.multitrack,
             info,
@@ -521,7 +566,7 @@ impl Engine {
         }
     }
 
-    fn info_json(&self, a: &ActiveRecording, done: Option<(&writer::WrittenFiles, &crate::pipeline::Timeline)>, segments: Option<&[TalkSegment]>) -> String {
+    fn info_json(&self, a: &ActiveRecording, done: Option<(&writer::WrittenFiles, &crate::pipeline::Timeline)>, segments: Option<&[TalkSegment]>, mp3: &[PathBuf]) -> String {
         let hms = |s: f64| {
             let ms = (s * 1000.0).round() as u64;
             format!("{:02}:{:02}:{:02}.{:03}", ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60, ms % 1000)
@@ -557,7 +602,7 @@ impl Engine {
         if let (Some((files, tl)), Some(segs)) = (done, segments) {
             v["finished"] = serde_json::json!(chrono::Local::now().to_rfc3339());
             v["duration_seconds"] = serde_json::json!((tl.frames as f64 / SAMPLE_RATE as f64 * 1000.0).round() / 1000.0);
-            v["files"] = serde_json::json!({ "mix": names(&files.mix), "multitrack": names(&files.multitrack) });
+            v["files"] = serde_json::json!({ "mp3": names(mp3), "wav_mix": names(&files.mix), "wav_multitrack": names(&files.multitrack) });
             v["talk_segments"] = serde_json::json!(segs
                 .iter()
                 .map(|s| serde_json::json!({ "mic": s.mic, "channel": s.channel, "start": hms(s.start_s), "end": hms(s.end_s), "start_seconds": (s.start_s * 1000.0).round() / 1000.0, "end_seconds": (s.end_s * 1000.0).round() / 1000.0 }))

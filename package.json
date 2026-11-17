@@ -1,7 +1,7 @@
 {
   "name": "pathosync",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Multi-microphone push-to-talk recorder for histopathology labs",
   "scripts": {
     "tauri": "tauri",

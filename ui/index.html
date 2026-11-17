@@ -110,6 +110,10 @@
             <button id="folderBtn" type="button" class="btn"><svg><use href="#i-folder"/></svg>Change…</button>
           </div>
           <div class="opt">
+            <div><b>Also keep WAV files</b><small>Every recording is saved as MP3 (plays on any computer or phone). Switch this on to keep the lossless WAV files as well; they are about 10 times larger.</small></div>
+            <label class="switch"><input id="keepWavInput" type="checkbox"> Keep WAV</label>
+          </div>
+          <div class="opt">
             <div><b>Keep before each press</b><small>Audio kept from just before the key goes down, so the first word is never cut.</small></div>
             <label class="num"><input id="prerollInput" type="number" min="0" max="2000" step="50"> ms</label>
           </div>
@@ -118,7 +122,7 @@
             <label class="num"><input id="tailInput" type="number" min="0" max="2000" step="50"> ms</label>
           </div>
           <div class="about small">
-            <p>Each recording creates a folder <code>&lt;case&gt;_&lt;date&gt;_&lt;time&gt;</code> with <code>_mix.wav</code> (all mics mixed), <code>_multitrack.wav</code> (one channel per mic) and <code>_info.json</code> (who spoke when).</p>
+            <p>Each recording creates a folder <code>&lt;case&gt;_&lt;date&gt;_&lt;time&gt;</code> with <code>_mix.mp3</code> (all mics mixed), one MP3 per mic (<code>_1-&lt;name&gt;.mp3</code>, …) and <code>_info.json</code> (who spoke when).</p>
             <p>Open from other software: <code>PathoSync.exe --case S26-1234 --folder "D:\Recordings" --exit-after-save</code></p>
             <p>Settings file: <code id="settingsPath"></code> · Version <span id="version"></span></p>
           </div>

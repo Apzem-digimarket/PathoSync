@@ -14,7 +14,7 @@ Staff instructions: [docs/QUICK-GUIDE.txt](docs/QUICK-GUIDE.txt) (it is also shi
 | Microphones | Up to 4 at once: USB, wireless receivers, or several inputs of one audio interface. Wired and wireless can be mixed. |
 | Sync ("virtual aggregate device") | Every mic is resampled onto one 48 kHz master clock, and each mic's clock drift is measured and corrected continuously. The **clap test** measures each mic's fixed delay so wireless and USB mics line up. |
 | Push-to-talk | Per mic: a keyboard key (works even when PathoSync is in the background), the mic's own button if it sends a key, or the on-screen *Hold to talk* pad. **0.5 s pre-roll** (the first word is never cut) and a **0.3 s release tail**. Both are adjustable. |
-| Files | `<case>_<date>_<time>/` containing `_mix.wav` (mono mix of all mics), `_multitrack.wav` (one channel per mic) and `_info.json` (mics, devices, and who spoke when). WAV files are 24-bit, 48 kHz. |
+| Files | `<case>_<date>_<time>/` containing `_mix.mp3` (mono mix of all mics), one MP3 per mic (`_1-<name>.mp3`, …) and `_info.json` (mics, devices, who spoke when). MP3: 128 kbit/s mono, 48 kHz. Recording itself is done as 24-bit WAV (crash-safe) and converted on Stop; the WAVs (`_mix.wav`, `_multitrack.wav`) can be kept with the *Keep WAV* option. |
 | Safety | Files are written on a separate thread and their headers are refreshed every second, so a crash or power cut keeps everything up to the last second. Closing the window during a recording saves it. Recordings longer than 1 hour continue in `_part2` files (WAV size limit). |
 | Mic check | Live background-noise level, clock drift, dropouts and sync delay per mic, to compare microphones before buying. |
 | Add-on use | Other software can open it with a case number: `PathoSync.exe --case S26-1234 --folder "D:\Recordings" --exit-after-save` |
@@ -57,6 +57,8 @@ docs/      staff quick guide
 **Windows .exe:** every push to `main` builds `PathoSync.exe` with GitHub Actions. Open
 *Actions → Build Windows app → latest run → Artifacts → PathoSync-windows*. The build runs the
 engine tests first.
+
+MP3 encoding uses LAME (LGPL) through the `mp3lame-encoder` crate, compiled from source.
 
 **Locally** (Rust stable + Node 20):
 
