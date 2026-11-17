@@ -1,0 +1,45 @@
+# Builds PathoSync.exe for Windows on every push (and on demand: Actions → Build Windows app → Run).
+# Download it from the run's "Artifacts" section: PathoSync-windows.zip
+name: Build Windows app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test the audio engine (sync, push-to-talk, files)
+        run: cargo test --release -p pathosync-core
+
+      - name: Build PathoSync.exe
+        run: npx tauri build --no-bundle
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/pathosync.exe dist/PathoSync.exe
+          Copy-Item docs/QUICK-GUIDE.txt "dist/PathoSync - Quick guide.txt"
+          Get-ChildItem dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PathoSync-windows
+          path: dist/
+          retention-days: 30

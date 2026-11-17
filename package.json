@@ -1,0 +1,14 @@
+{
+  "name": "pathosync",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Multi-microphone push-to-talk recorder for histopathology labs",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev --config app/tauri.conf.json",
+    "build": "tauri build --no-bundle"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.5"
+  }
+}

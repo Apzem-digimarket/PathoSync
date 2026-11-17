@@ -1,0 +1,41 @@
+PATHOSYNC - QUICK GUIDE
+=======================
+
+PathoSync records up to 4 microphones at the same time. A microphone is only
+recorded while its push-to-talk key or button is HELD. Every recording is saved
+as one mixed file plus one file with a separate channel for each microphone.
+
+FIRST TIME (set up once per computer)
+  1. Plug in the microphones.
+  2. Double-click PathoSync.exe and click "Setup".
+  3. Microphones tab: switch on each mic, give it a name (e.g. "Grossing"),
+     choose the microphone, and set its push-to-talk key (F1, F2, ... or the
+     microphone's own button if it sends a key).
+  4. Saving & options tab: choose the folder for recordings.
+  5. Click "Save & apply".
+  6. Wireless and USB mics mixed together? Mic check tab > "Start clap test",
+     then clap once near all the mics. This lines them up exactly.
+
+EVERY RECORDING
+  1. Type the case / accession number (optional).
+  2. Click "Start recording".
+  3. HOLD your key (or the "Hold to talk" button on screen) while speaking.
+     The tile turns red and shows ON AIR. Release when you finish.
+     The half-second before you press is kept, so the first word is never cut.
+  4. Click "Stop & save". Click "Open folder" to see the files.
+
+WHAT IS SAVED (one folder per recording)
+  <case>_<date>_<time>_mix.wav         all microphones mixed together
+  <case>_<date>_<time>_multitrack.wav  one channel per microphone
+  <case>_<date>_<time>_info.json       who spoke when, mic names, times
+
+GOOD TO KNOW
+  - The keys work even when PathoSync is behind other windows.
+  - Closing PathoSync during a recording saves the recording first.
+  - If the computer crashes, the files still contain everything up to
+    the last second.
+  - The settings are kept in "PathoSync.settings.json" next to the program.
+    Copy both files to another computer to reuse the same setup.
+
+OPENING FROM OTHER SOFTWARE
+  PathoSync.exe --case S26-1234 --folder "D:\Recordings" --exit-after-save

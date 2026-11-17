@@ -1,0 +1,5 @@
+/target
+/node_modules
+/app/gen
+*.settings.json
+.DS_Store

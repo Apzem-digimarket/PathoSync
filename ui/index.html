@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PathoSync</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-logo" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 16h3M10 10v12M15 6v20M20 11v10M25 14v4M28 16h0"/></symbol>
+  </svg>
+
+  <header class="top">
+    <div class="brand">
+      <span class="logo"><svg><use href="#i-logo"/></svg></span>
+      <div><b>PathoSync</b><small>Multi-mic push-to-talk recorder</small></div>
+    </div>
+    <div class="top-right">
+      <span id="statePill" class="pill">Starting…</span>
+      <button id="setupBtn" class="btn btn-ghost" type="button"><svg><use href="#i-gear"/></svg>Setup</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner" class="banner" hidden><svg><use href="#i-alert"/></svg><div id="bannerText"></div></div>
+
+    <section class="session card">
+      <label class="case">
+        <span>Case / accession number <i>(optional)</i></span>
+        <input id="caseInput" type="text" maxlength="60" autocomplete="off" spellcheck="false" placeholder="e.g. S26-1234">
+      </label>
+      <div class="rec-wrap">
+        <button id="recBtn" class="rec" type="button" disabled>
+          <span class="rec-dot"></span><span id="recLabel">Start recording</span>
+        </button>
+        <div class="rec-info">
+          <span id="timer" class="timer">00:00</span>
+          <span id="saveTo" class="save-to"></span>
+        </div>
+      </div>
+    </section>
+
+    <p id="hint" class="hint">Hold a mic's key (or its button below) while you speak. Only held mics are recorded; the half-second before each press is kept.</p>
+
+    <section id="tiles" class="tiles" aria-label="Microphones"></section>
+
+    <section id="saved" class="saved card" hidden>
+      <div class="saved-head">
+        <span class="ok"><svg><use href="#i-check"/></svg></span>
+        <div>
+          <b id="savedTitle">Recording saved</b>
+          <small id="savedMeta"></small>
+        </div>
+        <button id="openFolderBtn" class="btn" type="button"><svg><use href="#i-folder"/></svg>Open folder</button>
+      </div>
+      <ul id="savedFiles" class="files"></ul>
+      <ul id="savedWarn" class="warn-list"></ul>
+    </section>
+  </main>
+
+  <!-- Setup -->
+  <dialog id="setup" class="setup">
+    <form method="dialog" id="setupForm">
+      <header class="setup-head">
+        <h2>Setup</h2>
+        <nav class="tabs" role="tablist">
+          <button type="button" class="tab" data-tab="mics" aria-selected="true">Microphones</button>
+          <button type="button" class="tab" data-tab="check" aria-selected="false">Mic check</button>
+          <button type="button" class="tab" data-tab="options" aria-selected="false">Saving &amp; options</button>
+        </nav>
+      </header>
+
+      <div class="setup-body">
+        <section class="pane" data-pane="mics">
+          <p class="pane-intro">Switch on up to 4 microphones. Each one gets its own push-to-talk key and its own channel in the multitrack file. A mic's own button works if it sends a key — press it when choosing the key.</p>
+          <div id="micRows" class="mic-rows"></div>
+          <p class="small">Microphone missing? Plug it in, then <button id="refreshDevices" type="button" class="link">refresh the list</button>.</p>
+        </section>
+
+        <section class="pane" data-pane="check" hidden>
+          <p class="pane-intro">Live readings for the microphones that are switched on (after saving). Use them to compare mics before buying, and to check a setup.</p>
+          <table class="check-table">
+            <thead><tr><th>Mic</th><th>Level</th><th>Background noise</th><th>Clock drift</th><th>Dropouts</th><th>Sync delay</th></tr></thead>
+            <tbody id="checkRows"></tbody>
+          </table>
+          <div class="clap card-inner">
+            <div>
+              <b>Clap test</b> — lines up mics that have different built-in delays (e.g. wireless + USB).
+              <ol>
+                <li>Put all mics close together, keep the room quiet.</li>
+                <li>Press <i>Start clap test</i>, then clap once, sharply, within 4 seconds.</li>
+              </ol>
+            </div>
+            <div class="clap-act">
+              <button id="clapBtn" type="button" class="btn">Start clap test</button>
+              <span id="clapMsg" class="small"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="pane" data-pane="options" hidden>
+          <div class="opt">
+            <div><b>Save recordings in</b><small id="folderPath"></small></div>
+            <button id="folderBtn" type="button" class="btn"><svg><use href="#i-folder"/></svg>Change…</button>
+          </div>
+          <div class="opt">
+            <div><b>Keep before each press</b><small>Audio kept from just before the key goes down, so the first word is never cut.</small></div>
+            <label class="num"><input id="prerollInput" type="number" min="0" max="2000" step="50"> ms</label>
+          </div>
+          <div class="opt">
+            <div><b>Keep after release</b><small>The mic stays open this long after the key is released, so the last word isn't clipped.</small></div>
+            <label class="num"><input id="tailInput" type="number" min="0" max="2000" step="50"> ms</label>
+          </div>
+          <div class="about small">
+            <p>Each recording creates a folder <code>&lt;case&gt;_&lt;date&gt;_&lt;time&gt;</code> with <code>_mix.wav</code> (all mics mixed), <code>_multitrack.wav</code> (one channel per mic) and <code>_info.json</code> (who spoke when).</p>
+            <p>Open from other software: <code>PathoSync.exe --case S26-1234 --folder "D:\Recordings" --exit-after-save</code></p>
+            <p>Settings file: <code id="settingsPath"></code> · Version <span id="version"></span></p>
+          </div>
+        </section>
+      </div>
+
+      <footer class="setup-foot">
+        <span id="setupErr" class="err" role="alert"></span>
+        <button id="cancelSetup" type="button" class="btn btn-ghost">Cancel</button>
+        <button id="saveSetup" type="button" class="btn btn-primary">Save &amp; apply</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div id="keyCapture" class="key-capture" hidden>
+    <div class="card">
+      <b>Press the push-to-talk key</b>
+      <p>Press a key (e.g. F5), a key combination, or the microphone's own button.<br>Press <kbd>Esc</kbd> to cancel.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
