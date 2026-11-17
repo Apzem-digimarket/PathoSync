@@ -182,3 +182,5 @@ main { max-width: 1240px; margin: 0 auto; padding: 22px 28px 40px; }
   .mic-row .extra { grid-column: 1 / -1; }
 }
 input[type="range"], input[type="checkbox"] { accent-color: var(--accent); }
+
+.saved.is-silent #savedTitle { color: var(--rec); }

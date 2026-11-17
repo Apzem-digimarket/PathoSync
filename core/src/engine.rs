@@ -478,6 +478,15 @@ impl Engine {
                 warnings.push(format!("{}: the microphone briefly stopped sending sound {d} time(s) during this recording.", self.mic_label(i)));
             }
         }
+        if timeline.segments.is_empty() {
+            warnings.insert(0, "Nothing was recorded: no microphone was ON AIR, so the files are silent. PathoSync records only while a mic's key (or its \"Hold to talk\" button) is held down - hold it while you speak.".to_string());
+        }
+        for (i, &peak) in timeline.peaks.iter().enumerate() {
+            let held: f64 = timeline.segments.iter().filter(|s| s.channel == i).map(|s| s.end_s - s.start_s).sum();
+            if held > 0.0 && peak < 1e-4 {
+                warnings.insert(0, format!("{}: was ON AIR for {held:.0} s but picked up no sound, so its part of the recording is silent. Check the microphone (see the message on its tile).", self.mic_label(i)));
+            }
+        }
         let segments: Vec<TalkSegment> =
             timeline.segments.iter().map(|s| TalkSegment { mic: self.mic_label(s.channel), channel: s.channel + 1, start_s: s.start_s, end_s: s.end_s }).collect();
         let info = active.folder.join(format!("{}_info.json", active.base));

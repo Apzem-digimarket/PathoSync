@@ -2491,7 +2491,7 @@ dependencies = [
 
 [[package]]
 name = "pathosync"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "parking_lot 0.13.0",
  "pathosync-core",
@@ -2505,7 +2505,7 @@ dependencies = [
 
 [[package]]
 name = "pathosync-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "cpal",

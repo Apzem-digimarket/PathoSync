@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "PathoSync",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "app.pathosync.recorder",
   "build": {
     "frontendDist": "../ui"

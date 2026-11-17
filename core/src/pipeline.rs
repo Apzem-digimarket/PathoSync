@@ -87,6 +87,8 @@ pub struct Timeline {
     pub frames: u64,
     pub segments: Vec<Segment>,
     pub dropouts: Vec<u64>,
+    /// Loudest sample each mic put into the recording while it was on air (0 = silence).
+    pub peaks: Vec<f32>,
 }
 
 struct Chan {
@@ -109,6 +111,7 @@ struct Chan {
     seg_open: Option<u64>,
     segments: Vec<(u64, u64)>,
     dropouts_at_rec_start: u64,
+    rec_peak: f32,
     /// Master frame at which this mic last delivered audio.
     last_delivery: u64,
 }
@@ -173,6 +176,7 @@ impl Pipeline {
                     seg_open: None,
                     segments: Vec::new(),
                     dropouts_at_rec_start: 0,
+                    rec_peak: 0.0,
                     last_delivery: 0,
                     setup,
                 }
@@ -299,6 +303,9 @@ impl Pipeline {
                 for (i, &s) in delayed.iter().enumerate() {
                     let open = c.gate.is_open_at(o + i as u64);
                     track_segment(c, open, file_frame + i as u64);
+                    if open {
+                        c.rec_peak = c.rec_peak.max(s.abs());
+                    }
                     multi[i * nch + ci] = s;
                     mix[i] += s * c.gain;
                 }
@@ -332,6 +339,7 @@ impl Pipeline {
             c.segments.clear();
             c.seg_open = None;
             c.dropouts_at_rec_start = c.dropouts();
+            c.rec_peak = 0.0;
         }
         self.rec = Some(Recording { writer, file_frame: 0 });
     }
@@ -355,6 +363,9 @@ impl Pipeline {
                 for (i, &s) in pending.iter().enumerate() {
                     let open = c.gate.is_open_at(o + i as u64);
                     track_segment(c, open, file_frame + i as u64);
+                    if open {
+                        c.rec_peak = c.rec_peak.max(s.abs());
+                    }
                     multi[i * nch + ci] = s;
                     mix[i] += s * c.gain;
                 }
@@ -366,7 +377,9 @@ impl Pipeline {
         let rate = self.rate as f64;
         let mut segments = Vec::new();
         let mut dropouts = Vec::new();
+        let mut peaks = Vec::new();
         for (ci, c) in self.chans.iter_mut().enumerate() {
+            peaks.push(c.rec_peak);
             if let Some(start) = c.seg_open.take() {
                 c.segments.push((start, file_frame));
             }
@@ -374,7 +387,7 @@ impl Pipeline {
             dropouts.push(c.dropouts() - c.dropouts_at_rec_start);
         }
         segments.sort_by(|a, b| a.start_s.partial_cmp(&b.start_s).unwrap_or(std::cmp::Ordering::Equal));
-        Some((rec.writer, Timeline { frames: file_frame, segments, dropouts }))
+        Some((rec.writer, Timeline { frames: file_frame, segments, dropouts, peaks }))
     }
 
     /// Records `secs` of all mics for the clap test; the result appears in `take_sync_result`.
@@ -585,6 +598,42 @@ mod tests {
                 assert!((t - t0).abs() < 0.003, "click {k}: {:.1} ms apart", (t - t0) * 1000.0);
             }
         }
+    }
+
+    #[test]
+    fn timeline_reports_silent_and_unpressed_mics() {
+        // mic A: real sound, held; mic B: held but delivers only zeros; nobody else
+        let (mut ma, sa) = SimMic::new(48_000.0, 0.0, 480, vec![0.8, 1.2, 1.6]);
+        let (mut mb, sb) = SimMic::new(48_000.0, 0.0, 480, vec![]);
+        let chans: Vec<(ChannelSetup, Box<dyn Source>)> = vec![(setup("A", 48_000), Box::new(sa)), (setup("B", 48_000), Box::new(sb))];
+        let mut p = Pipeline::new(48_000, 240, 500, 300, chans);
+        let (tx, _rx) = crossbeam_channel::unbounded();
+        p.start_recording(tx);
+        for b in 0..600 {
+            let t = (b + 1) as f64 / 200.0;
+            ma.advance_to(t);
+            mb.advance_to(t);
+            if b == 100 {
+                p.ptt(0, true);
+                p.ptt(1, true);
+            }
+            p.process_block();
+        }
+        let (_tx, tl) = p.stop_recording().unwrap();
+        assert!(tl.peaks[0] > 0.3, "mic A peak {}", tl.peaks[0]);
+        assert_eq!(tl.peaks[1], 0.0);
+        assert!(tl.segments.iter().any(|s| s.channel == 1));
+
+        // a recording where nobody presses talk has no segments
+        let (_m, s) = SimMic::new(48_000.0, 0.0, 480, vec![]);
+        let mut p = Pipeline::new(48_000, 240, 500, 300, vec![(setup("A", 48_000), Box::new(s) as Box<dyn Source>)]);
+        let (tx, _rx) = crossbeam_channel::unbounded();
+        p.start_recording(tx);
+        for _ in 0..200 {
+            p.process_block();
+        }
+        let (_tx, tl) = p.stop_recording().unwrap();
+        assert!(tl.segments.is_empty());
     }
 
     #[test]

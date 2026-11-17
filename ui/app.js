@@ -255,7 +255,10 @@
   function showSaved(r) {
     lastSaved = r;
     $('saved').hidden = false;
-    $('savedTitle').textContent = `Saved: ${baseName(r.folder)}`;
+    const silent = r.segments.length === 0 || r.warnings.some((w) => w.includes('picked up no sound'));
+    $('savedTitle').textContent = r.segments.length === 0 ? `Saved, but nothing was recorded (silent): ${baseName(r.folder)}`
+      : silent ? `Saved, but part of it is silent: ${baseName(r.folder)}` : `Saved: ${baseName(r.folder)}`;
+    $('saved').classList.toggle('is-silent', silent);
     const speakers = new Set(r.segments.map((s) => s.mic));
     $('savedMeta').textContent = `${fmtDuration(r.duration_s)} · ${r.segments.length} talk segment${r.segments.length === 1 ? '' : 's'}` + (speakers.size ? ` · ${[...speakers].join(', ')}` : ' · nobody pressed talk');
     $('savedFiles').replaceChildren(
